@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show PostgrestException, StorageException;
 
 import '../auth/auth_models.dart';
 import '../backend/control_room_repository.dart';
 import 'content_section_editor.dart';
 import 'contact_enquiries_screen.dart';
+import 'media_picker_options.dart';
 import 'website_feature_inventory_screen.dart';
 import '../core/layout/responsive.dart';
 import '../help/smart_help_button.dart';
@@ -15,6 +18,31 @@ const _panel = Color(0xFF0D141C);
 const _border = Color(0xFF1B2A35);
 const _muted = Color(0xFF8A99A5);
 const _cyan = Color(0xFF00D9F5);
+
+/// Matches the Supabase project storage upload limit.
+const _maxUploadBytes = 50 * 1024 * 1024;
+const _messageDuration = Duration(seconds: 6);
+
+const _supportedMediaTypes = <String, String>{
+  'jpg': 'image/jpeg',
+  'jpeg': 'image/jpeg',
+  'png': 'image/png',
+  'webp': 'image/webp',
+  'gif': 'image/gif',
+  'heic': 'image/heic',
+  'heif': 'image/heif',
+  'mp4': 'video/mp4',
+  'm4v': 'video/mp4',
+  'mov': 'video/quicktime',
+  'mp3': 'audio/mpeg',
+  'm4a': 'audio/mp4',
+  'wav': 'audio/wav',
+};
+
+String _sizeLabel(int bytes) {
+  final megabytes = bytes / (1024 * 1024);
+  return '${megabytes >= 10 ? megabytes.round() : megabytes.toStringAsFixed(1)} MB';
+}
 
 class WebsiteManagementScreen extends StatelessWidget {
   const WebsiteManagementScreen({
@@ -641,49 +669,72 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
 
   Future<void> _upload() async {
     if (_uploading || widget.websites.isEmpty) return;
+    // An unrestricted picker is the only variant iOS, iPadOS and Android all
+    // open on the photo library and camera; the selection is checked below.
     final files = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const [
-        'jpg',
-        'jpeg',
-        'png',
-        'webp',
-        'gif',
-        'mp4',
-        'mov',
-        'mp3',
-        'm4a',
-        'wav',
-      ],
+      type: FileType.any,
+      webOptions: mediaPickerWebOptions(),
     );
-    if (files.isEmpty) {
-      return;
+    if (files.isEmpty) return;
+
+    final accepted = <({PlatformFile file, String mediaType})>[];
+    final rejected = <String>[];
+    for (final file in files) {
+      final mediaType = _mediaType(file.extension);
+      if (mediaType == null) {
+        rejected.add('${file.name} is not a supported format');
+        continue;
+      }
+      final size = await file.length();
+      if (size > _maxUploadBytes) {
+        rejected.add('${file.name} is ${_sizeLabel(size)}');
+        continue;
+      }
+      accepted.add((file: file, mediaType: mediaType));
     }
+
+    if (rejected.isNotEmpty && mounted) {
+      _showMessage(
+        '${rejected.join('. ')}. Photos may be JPG, PNG, HEIC, WebP or GIF, '
+        'video MP4 or MOV, audio MP3, M4A or WAV, up to ${_sizeLabel(_maxUploadBytes)} each.',
+      );
+    }
+    if (accepted.isEmpty) return;
+
     setState(() {
       _uploading = true;
       _uploadedCount = 0;
-      _uploadTotal = files.length;
+      _uploadTotal = accepted.length;
     });
+    final failures = <String>[];
     try {
-      for (final file in files) {
-        await widget.repository!.uploadMedia(
-          MediaUploadRequest(
-            websiteId: widget.websites.first.id!,
-            fileName: file.name,
-            bytes: await file.readAsBytes(),
-            mediaType: _mediaType(file.extension),
-          ),
-        );
-        if (mounted) setState(() => _uploadedCount++);
+      for (final entry in accepted) {
+        try {
+          final bytes = await entry.file.readAsBytes();
+          if (bytes.isEmpty) {
+            throw const FormatException(
+              'the file could not be read. If it is stored in the cloud, '
+              'download it to this device first.',
+            );
+          }
+          await widget.repository!.uploadMedia(
+            MediaUploadRequest(
+              websiteId: widget.websites.first.id!,
+              fileName: entry.file.name,
+              bytes: bytes,
+              mediaType: entry.mediaType,
+            ),
+          );
+          if (mounted) setState(() => _uploadedCount++);
+        } catch (error) {
+          failures.add('${entry.file.name}: ${_failureReason(error)}');
+        }
       }
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Media uploaded.')));
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to upload media.')),
+        _showMessage(
+          failures.isEmpty
+              ? 'Media uploaded.'
+              : 'Uploaded $_uploadedCount of ${accepted.length}. ${failures.first}',
         );
       }
     } finally {
@@ -695,6 +746,21 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
         });
       }
     }
+  }
+
+  void _showMessage(String message) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(message), duration: _messageDuration));
+
+  String _failureReason(Object error) {
+    final reason = switch (error) {
+      StorageException(:final message) => message,
+      PostgrestException(:final message) => message,
+      StateError(:final message) => message,
+      FormatException(:final message) => message,
+      _ => '',
+    }.trim();
+    return reason.isEmpty ? 'Upload could not be completed.' : reason;
   }
 
   @override
@@ -824,16 +890,8 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
             ],
           ),
   );
-  String _mediaType(String? extension) => switch (extension?.toLowerCase()) {
-    'mp4' || 'mov' => 'video/mp4',
-    'mp3' => 'audio/mpeg',
-    'm4a' => 'audio/mp4',
-    'wav' => 'audio/wav',
-    'png' => 'image/png',
-    'webp' => 'image/webp',
-    'gif' => 'image/gif',
-    _ => 'image/jpeg',
-  };
+  String? _mediaType(String? extension) =>
+      _supportedMediaTypes[extension?.toLowerCase()];
 }
 
 class _MediaLibraryItem extends StatelessWidget {
