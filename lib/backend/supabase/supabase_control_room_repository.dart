@@ -922,8 +922,9 @@ class SupabaseControlRoomRepository
   @override
   Future<void> uploadMedia(MediaUploadRequest request) async {
     if (!profile.websiteIds.contains(request.websiteId)) {
-      throw StateError(
-        'The selected website is not available to this account.',
+      throw const MediaUploadException(
+        MediaUploadStage.authorisation,
+        'the selected website is not available to this account',
       );
     }
     final safeName = request.fileName.replaceAll(
@@ -932,13 +933,20 @@ class SupabaseControlRoomRepository
     );
     final path =
         '${profile.tenantId}/${request.websiteId}/${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}_$safeName';
-    await client.storage
-        .from('website-media')
-        .uploadBinary(
-          path,
-          request.bytes,
-          fileOptions: FileOptions(contentType: request.mediaType),
-        );
+    try {
+      await client.storage
+          .from('website-media')
+          .uploadBinary(
+            path,
+            request.bytes,
+            fileOptions: FileOptions(contentType: request.mediaType),
+          );
+    } catch (error) {
+      throw MediaUploadException(
+        MediaUploadStage.storage,
+        _safeReason(error),
+      );
+    }
     try {
       await client.from('media').insert({
         'tenant_id': profile.tenantId,
@@ -947,11 +955,20 @@ class SupabaseControlRoomRepository
         'title': request.fileName,
         'metadata': {'type': request.mediaType},
       });
-    } catch (_) {
+    } catch (error) {
       await client.storage.from('website-media').remove([path]);
-      rethrow;
+      throw MediaUploadException(
+        MediaUploadStage.metadata,
+        _safeReason(error),
+      );
     }
   }
+
+  static String _safeReason(Object error) => switch (error) {
+    StorageException(:final message) => message,
+    PostgrestException(:final message) => message,
+    _ => '',
+  }.trim();
 
   @override
   Future<void> saveMediaMetadata({

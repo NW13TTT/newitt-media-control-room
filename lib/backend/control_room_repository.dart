@@ -322,6 +322,29 @@ class MediaUploadRequest {
   final String mediaType;
 }
 
+enum MediaUploadStage {
+  authorisation('checking your website access'),
+  storage('sending the file to secure storage'),
+  metadata('saving the media details');
+
+  const MediaUploadStage(this.description);
+
+  final String description;
+}
+
+/// Names the stage that failed so a beta tester can report it. Carries no
+/// storage path, credential or other backend detail.
+class MediaUploadException implements Exception {
+  const MediaUploadException(this.stage, this.reason);
+
+  final MediaUploadStage stage;
+  final String reason;
+
+  @override
+  String toString() => 'failed while ${stage.description}'
+      '${reason.isEmpty ? '' : ' ($reason)'}';
+}
+
 class SocialLinkRecord {
   const SocialLinkRecord({
     required this.id,

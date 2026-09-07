@@ -754,6 +754,7 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
 
   String _failureReason(Object error) {
     final reason = switch (error) {
+      MediaUploadException() => error.toString(),
       StorageException(:final message) => message,
       PostgrestException(:final message) => message,
       StateError(:final message) => message,
