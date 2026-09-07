@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "newitt-media-control-room",
+  "main": "./control-room-worker.js",
+  "compatibility_date": "2026-09-06",
+  "assets": {
+    "directory": "./build/web",
+    "binding": "ASSETS"
+  }
+}

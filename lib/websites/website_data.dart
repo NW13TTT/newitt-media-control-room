@@ -1,0 +1,52 @@
+import 'website_model.dart';
+import 'website_configuration.dart';
+
+const List<Website> developmentWebsites = [
+  Website(
+    name: 'NEWITT Media',
+    domain: 'newittmedia.co.uk',
+    type: WebsiteType.owner,
+    connectionStatus: WebsiteConnectionStatus.developmentPreview,
+    onlineStatus: WebsiteHealthStatus.unknown,
+    sslStatus: WebsiteSslStatus.unknown,
+    domainStatus: WebsiteDomainStatus.unknown,
+    deploymentStatus: WebsiteDeploymentStatus.unknown,
+    lastSuccessfulDeployment: null,
+    criticalErrorStatus: WebsiteCriticalErrorStatus.unknown,
+    capabilities: {
+      WebsiteCapability.pages,
+      WebsiteCapability.photography,
+      WebsiteCapability.gallery,
+      WebsiteCapability.socialMedia,
+      WebsiteCapability.youtube,
+      WebsiteCapability.contact,
+      WebsiteCapability.seo,
+      WebsiteCapability.analytics,
+    },
+    configuration: WebsiteConfiguration.newittMedia,
+  ),
+  Website(
+    name: 'Essex Paranormal',
+    domain: 'essexparanormal.com',
+    type: WebsiteType.customer,
+    connectionStatus: WebsiteConnectionStatus.developmentPreview,
+    onlineStatus: WebsiteHealthStatus.unknown,
+    sslStatus: WebsiteSslStatus.unknown,
+    domainStatus: WebsiteDomainStatus.unknown,
+    deploymentStatus: WebsiteDeploymentStatus.unknown,
+    lastSuccessfulDeployment: null,
+    criticalErrorStatus: WebsiteCriticalErrorStatus.unknown,
+    capabilities: {
+      WebsiteCapability.pages,
+      WebsiteCapability.gallery,
+      WebsiteCapability.photography,
+      WebsiteCapability.investigations,
+      WebsiteCapability.socialMedia,
+      WebsiteCapability.youtube,
+      WebsiteCapability.contact,
+      WebsiteCapability.seo,
+      WebsiteCapability.analytics,
+    },
+    configuration: WebsiteConfiguration.essexParanormal,
+  ),
+];

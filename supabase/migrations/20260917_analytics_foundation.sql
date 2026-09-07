@@ -1,0 +1,6 @@
+create type public.analytics_metric_type as enum ('CONTENT_RECORDS','PUBLISHED_CONTENT','MEDIA_ITEMS','SUPPORT_NEW','SUPPORT_OPEN','SUPPORT_RESOLVED','WEBSITE_COUNT','INFRASTRUCTURE_ERRORS');
+create table public.analytics_daily_metrics(id uuid primary key default gen_random_uuid(), tenant_id uuid not null references public.customer_accounts(id) on delete cascade, website_id uuid references public.websites(id) on delete cascade, metric_type public.analytics_metric_type not null, metric_date date not null default current_date, metric_value bigint not null default 0 check(metric_value>=0), source text not null default 'CONTROL_ROOM', created_at timestamptz not null default timezone('utc',now()), unique(tenant_id,website_id,metric_type,metric_date,source));
+create index analytics_daily_metrics_scope_idx on public.analytics_daily_metrics(tenant_id,website_id,metric_date,metric_type);
+alter table public.analytics_daily_metrics enable row level security;
+create policy analytics_daily_metrics_customer_select on public.analytics_daily_metrics for select to authenticated using(tenant_id=public.current_tenant_id());
+create policy analytics_daily_metrics_master_manage on public.analytics_daily_metrics for all to authenticated using(public.is_master_admin()) with check(public.is_master_admin());
