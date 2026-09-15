@@ -4,13 +4,17 @@ import '../core/layout/responsive.dart';
 import 'website_model.dart';
 
 class WebsitesScreen extends StatelessWidget {
-  const WebsitesScreen({super.key, required this.websites});
+  const WebsitesScreen({
+    super.key,
+    required this.websites,
+  });
 
   final List<Website> websites;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       color: const Color(0xFF080B10),
       child: SingleChildScrollView(
         child: ResponsiveContent(
@@ -23,13 +27,21 @@ class WebsitesScreen extends StatelessWidget {
               const SizedBox(height: 24),
               LayoutBuilder(
                 builder: (context, constraints) {
+                  if (websites.isEmpty) {
+                    return _buildEmptyState();
+                  }
+
                   if (constraints.maxWidth < 900) {
                     return Column(
                       children: websites
                           .map(
                             (website) => Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: WebsiteStatusCard(website: website),
+                              padding: const EdgeInsets.only(
+                                bottom: 16,
+                              ),
+                              child: WebsiteStatusCard(
+                                website: website,
+                              ),
                             ),
                           )
                           .toList(),
@@ -38,7 +50,8 @@ class WebsitesScreen extends StatelessWidget {
 
                   return GridView.builder(
                     shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
+                    physics:
+                        const NeverScrollableScrollPhysics(),
                     itemCount: websites.length,
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
@@ -121,19 +134,23 @@ class WebsitesScreen extends StatelessWidget {
 
     final String message;
     final IconData icon;
+    final Color iconColor;
 
     if (hasLiveConnection) {
       message =
           'Live website connections are active. The status shown below comes from the connected website records.';
       icon = Icons.link_outlined;
+      iconColor = const Color(0xFF54D68B);
     } else if (hasDevelopmentPreview) {
       message =
           'Some website profiles are still in development preview. Live status will be shown when the connected website record reports it.';
       icon = Icons.visibility_outlined;
+      iconColor = const Color(0xFFE9B949);
     } else {
       message =
           'No connected website records are currently available. Website status will appear here when a live connection is configured.';
       icon = Icons.info_outline;
+      iconColor = const Color(0xFFE9B949);
     }
 
     return Container(
@@ -151,7 +168,7 @@ class WebsitesScreen extends StatelessWidget {
         children: [
           Icon(
             icon,
-            color: const Color(0xFF00D9F5),
+            color: iconColor,
             size: 20,
           ),
           const SizedBox(width: 12),
@@ -163,6 +180,48 @@ class WebsitesScreen extends StatelessWidget {
                 fontSize: 12,
                 height: 1.45,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D141C),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF1B2A35),
+        ),
+      ),
+      child: const Column(
+        children: [
+          Icon(
+            Icons.language_outlined,
+            size: 42,
+            color: Color(0xFF00D9F5),
+          ),
+          SizedBox(height: 14),
+          Text(
+            'No websites available',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+          SizedBox(height: 7),
+          Text(
+            'No website records are currently available for this account.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: Color(0xFF7F8B95),
+              height: 1.45,
             ),
           ),
         ],
@@ -194,11 +253,13 @@ class WebsiteStatusCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     Text(
                       website.name,
@@ -224,11 +285,14 @@ class WebsiteStatusCard extends StatelessWidget {
               ),
             ],
           ),
+
           const SizedBox(height: 18),
+
           const Divider(
             color: Color(0xFF1B2730),
             height: 1,
           ),
+
           const SizedBox(height: 16),
 
           _StatusLine(
@@ -311,17 +375,26 @@ class WebsiteStatusCard extends StatelessWidget {
 
           const SizedBox(height: 9),
 
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: website.capabilities
-                .map(
-                  (capability) => _CapabilityChip(
-                    label: capability.label,
-                  ),
-                )
-                .toList(),
-          ),
+          if (website.capabilities.isEmpty)
+            const Text(
+              'No capabilities recorded.',
+              style: TextStyle(
+                fontSize: 11,
+                color: Color(0xFF697783),
+              ),
+            )
+          else
+            Wrap(
+              spacing: 7,
+              runSpacing: 7,
+              children: website.capabilities
+                  .map(
+                    (capability) => _CapabilityChip(
+                      label: capability.label,
+                    ),
+                  )
+                  .toList(),
+            ),
         ],
       ),
     );
