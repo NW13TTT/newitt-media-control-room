@@ -19,7 +19,7 @@ class WebsitesScreen extends StatelessWidget {
             children: [
               _buildHeader(),
               const SizedBox(height: 24),
-              _buildPreviewNotice(),
+              _buildConnectionNotice(),
               const SizedBox(height: 24),
               LayoutBuilder(
                 builder: (context, constraints) {
@@ -42,13 +42,15 @@ class WebsitesScreen extends StatelessWidget {
                     itemCount: websites.length,
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: 0.92,
-                        ),
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 0.92,
+                    ),
                     itemBuilder: (context, index) {
-                      return WebsiteStatusCard(website: websites[index]);
+                      return WebsiteStatusCard(
+                        website: websites[index],
+                      );
                     },
                   );
                 },
@@ -92,7 +94,10 @@ class WebsitesScreen extends StatelessWidget {
               SizedBox(height: 6),
               Text(
                 'Manage website profiles and review operational health.',
-                style: TextStyle(fontSize: 13, color: Color(0xFF7F8B95)),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF7F8B95),
+                ),
               ),
             ],
           ),
@@ -101,24 +106,59 @@ class WebsitesScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPreviewNotice() {
+  Widget _buildConnectionNotice() {
+    final hasLiveConnection = websites.any(
+      (website) =>
+          website.connectionStatus ==
+          WebsiteConnectionStatus.connected,
+    );
+
+    final hasDevelopmentPreview = websites.any(
+      (website) =>
+          website.connectionStatus ==
+          WebsiteConnectionStatus.developmentPreview,
+    );
+
+    final String message;
+    final IconData icon;
+
+    if (hasLiveConnection) {
+      message =
+          'Live website connections are active. The status shown below comes from the connected website records.';
+      icon = Icons.link_outlined;
+    } else if (hasDevelopmentPreview) {
+      message =
+          'Some website profiles are still in development preview. Live status will be shown when the connected website record reports it.';
+      icon = Icons.visibility_outlined;
+    } else {
+      message =
+          'No connected website records are currently available. Website status will appear here when a live connection is configured.';
+      icon = Icons.info_outline;
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF151B24),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF263543)),
+        border: Border.all(
+          color: const Color(0xFF263543),
+        ),
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.visibility_outlined, color: Color(0xFF00D9F5), size: 20),
-          SizedBox(width: 12),
+          Icon(
+            icon,
+            color: const Color(0xFF00D9F5),
+            size: 20,
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Development preview. No live website connections are active. Customer cards show operational placeholders only; private website content is not exposed here.',
-              style: TextStyle(
+              message,
+              style: const TextStyle(
                 color: Color(0xFFB6C3CB),
                 fontSize: 12,
                 height: 1.45,
@@ -132,7 +172,10 @@ class WebsitesScreen extends StatelessWidget {
 }
 
 class WebsiteStatusCard extends StatelessWidget {
-  const WebsiteStatusCard({super.key, required this.website});
+  const WebsiteStatusCard({
+    super.key,
+    required this.website,
+  });
 
   final Website website;
 
@@ -143,7 +186,9 @@ class WebsiteStatusCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF0D141C),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFF1B2A35)),
+        border: Border.all(
+          color: const Color(0xFF1B2A35),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,49 +219,86 @@ class WebsiteStatusCard extends StatelessWidget {
                   ],
                 ),
               ),
-              _WebsiteTypeBadge(type: website.type),
+              _WebsiteTypeBadge(
+                type: website.type,
+              ),
             ],
           ),
           const SizedBox(height: 18),
-          const Divider(color: Color(0xFF1B2730), height: 1),
+          const Divider(
+            color: Color(0xFF1B2730),
+            height: 1,
+          ),
           const SizedBox(height: 16),
+
           _StatusLine(
             icon: Icons.link_outlined,
             label: 'Connection',
-            value: _connectionLabel(website.connectionStatus),
-            color: const Color(0xFFE9B949),
+            value: _connectionLabel(
+              website.connectionStatus,
+            ),
+            color: _connectionColor(
+              website.connectionStatus,
+            ),
           ),
+
           _StatusLine(
             icon: Icons.language_outlined,
             label: 'Website online',
-            value: _healthLabel(website.onlineStatus),
-            color: _healthColor(website.onlineStatus),
+            value: _healthLabel(
+              website.onlineStatus,
+            ),
+            color: _healthColor(
+              website.onlineStatus,
+            ),
           ),
+
           _StatusLine(
             icon: Icons.lock_outline,
             label: 'SSL status',
-            value: _sslLabel(website.sslStatus),
-            color: _sslColor(website.sslStatus),
+            value: _sslLabel(
+              website.sslStatus,
+            ),
+            color: _sslColor(
+              website.sslStatus,
+            ),
           ),
+
           _StatusLine(
             icon: Icons.public_outlined,
             label: 'Domain status',
-            value: _domainLabel(website.domainStatus),
-            color: _domainColor(website.domainStatus),
+            value: _domainLabel(
+              website.domainStatus,
+            ),
+            color: _domainColor(
+              website.domainStatus,
+            ),
           ),
+
           _StatusLine(
             icon: Icons.rocket_launch_outlined,
             label: 'Deployment',
-            value: _deploymentLabel(website.deploymentStatus),
-            color: _deploymentColor(website.deploymentStatus),
+            value: _deploymentLabel(
+              website.deploymentStatus,
+            ),
+            color: _deploymentColor(
+              website.deploymentStatus,
+            ),
           ),
+
           _StatusLine(
             icon: Icons.error_outline,
             label: 'Critical errors',
-            value: _errorLabel(website.criticalErrorStatus),
-            color: _errorColor(website.criticalErrorStatus),
+            value: _errorLabel(
+              website.criticalErrorStatus,
+            ),
+            color: _errorColor(
+              website.criticalErrorStatus,
+            ),
           ),
+
           const SizedBox(height: 14),
+
           const Text(
             'CAPABILITIES',
             style: TextStyle(
@@ -226,12 +308,18 @@ class WebsiteStatusCard extends StatelessWidget {
               color: Color(0xFF697783),
             ),
           ),
+
           const SizedBox(height: 9),
+
           Wrap(
             spacing: 7,
             runSpacing: 7,
             children: website.capabilities
-                .map((capability) => _CapabilityChip(label: capability.label))
+                .map(
+                  (capability) => _CapabilityChip(
+                    label: capability.label,
+                  ),
+                )
                 .toList(),
           ),
         ],
@@ -239,117 +327,213 @@ class WebsiteStatusCard extends StatelessWidget {
     );
   }
 
-  static String _connectionLabel(WebsiteConnectionStatus status) {
+  static String _connectionLabel(
+    WebsiteConnectionStatus status,
+  ) {
     switch (status) {
       case WebsiteConnectionStatus.connected:
         return 'Connected';
+
       case WebsiteConnectionStatus.developmentPreview:
         return 'Development preview';
+
       case WebsiteConnectionStatus.notConnected:
         return 'Not connected';
     }
   }
 
-  static String _healthLabel(WebsiteHealthStatus status) {
+  static Color _connectionColor(
+    WebsiteConnectionStatus status,
+  ) {
+    switch (status) {
+      case WebsiteConnectionStatus.connected:
+        return const Color(0xFF54D68B);
+
+      case WebsiteConnectionStatus.developmentPreview:
+        return const Color(0xFFE9B949);
+
+      case WebsiteConnectionStatus.notConnected:
+        return const Color(0xFFE06C75);
+    }
+  }
+
+  static String _healthLabel(
+    WebsiteHealthStatus status,
+  ) {
     switch (status) {
       case WebsiteHealthStatus.online:
         return 'Online';
+
       case WebsiteHealthStatus.offline:
         return 'Offline';
+
       case WebsiteHealthStatus.unknown:
         return 'Not checked';
     }
   }
 
-  static String _sslLabel(WebsiteSslStatus status) {
+  static String _sslLabel(
+    WebsiteSslStatus status,
+  ) {
     switch (status) {
       case WebsiteSslStatus.active:
         return 'Active';
+
       case WebsiteSslStatus.inactive:
         return 'Inactive';
+
       case WebsiteSslStatus.unknown:
         return 'Not checked';
     }
   }
 
-  static String _domainLabel(WebsiteDomainStatus status) {
+  static String _domainLabel(
+    WebsiteDomainStatus status,
+  ) {
     switch (status) {
       case WebsiteDomainStatus.connected:
         return 'Connected';
+
       case WebsiteDomainStatus.notConfigured:
         return 'Not configured';
+
       case WebsiteDomainStatus.unknown:
         return 'Not checked';
     }
   }
 
-  static String _deploymentLabel(WebsiteDeploymentStatus status) {
+  static String _deploymentLabel(
+    WebsiteDeploymentStatus status,
+  ) {
     switch (status) {
       case WebsiteDeploymentStatus.successful:
         return 'Successful';
+
       case WebsiteDeploymentStatus.pending:
         return 'Pending';
+
       case WebsiteDeploymentStatus.failed:
         return 'Failed';
+
       case WebsiteDeploymentStatus.unknown:
         return 'Not available';
     }
   }
 
-  static String _errorLabel(WebsiteCriticalErrorStatus status) {
+  static String _errorLabel(
+    WebsiteCriticalErrorStatus status,
+  ) {
     switch (status) {
       case WebsiteCriticalErrorStatus.noneReported:
         return 'None reported';
+
       case WebsiteCriticalErrorStatus.errorsReported:
         return 'Errors reported';
+
       case WebsiteCriticalErrorStatus.unknown:
         return 'Not checked';
     }
   }
 
-  static Color _healthColor(WebsiteHealthStatus status) {
-    return status == WebsiteHealthStatus.unknown
-        ? const Color(0xFFE9B949)
-        : const Color(0xFF54D68B);
+  static Color _healthColor(
+    WebsiteHealthStatus status,
+  ) {
+    switch (status) {
+      case WebsiteHealthStatus.online:
+        return const Color(0xFF54D68B);
+
+      case WebsiteHealthStatus.offline:
+        return const Color(0xFFE06C75);
+
+      case WebsiteHealthStatus.unknown:
+        return const Color(0xFFE9B949);
+    }
   }
 
-  static Color _sslColor(WebsiteSslStatus status) {
-    return status == WebsiteSslStatus.unknown
-        ? const Color(0xFFE9B949)
-        : const Color(0xFF54D68B);
+  static Color _sslColor(
+    WebsiteSslStatus status,
+  ) {
+    switch (status) {
+      case WebsiteSslStatus.active:
+        return const Color(0xFF54D68B);
+
+      case WebsiteSslStatus.inactive:
+        return const Color(0xFFE06C75);
+
+      case WebsiteSslStatus.unknown:
+        return const Color(0xFFE9B949);
+    }
   }
 
-  static Color _domainColor(WebsiteDomainStatus status) {
-    return status == WebsiteDomainStatus.unknown
-        ? const Color(0xFFE9B949)
-        : const Color(0xFF54D68B);
+  static Color _domainColor(
+    WebsiteDomainStatus status,
+  ) {
+    switch (status) {
+      case WebsiteDomainStatus.connected:
+        return const Color(0xFF54D68B);
+
+      case WebsiteDomainStatus.notConfigured:
+        return const Color(0xFFE9B949);
+
+      case WebsiteDomainStatus.unknown:
+        return const Color(0xFFE9B949);
+    }
   }
 
-  static Color _deploymentColor(WebsiteDeploymentStatus status) {
-    return status == WebsiteDeploymentStatus.unknown
-        ? const Color(0xFFE9B949)
-        : const Color(0xFF54D68B);
+  static Color _deploymentColor(
+    WebsiteDeploymentStatus status,
+  ) {
+    switch (status) {
+      case WebsiteDeploymentStatus.successful:
+        return const Color(0xFF54D68B);
+
+      case WebsiteDeploymentStatus.pending:
+        return const Color(0xFFE9B949);
+
+      case WebsiteDeploymentStatus.failed:
+        return const Color(0xFFE06C75);
+
+      case WebsiteDeploymentStatus.unknown:
+        return const Color(0xFFE9B949);
+    }
   }
 
-  static Color _errorColor(WebsiteCriticalErrorStatus status) {
-    return status == WebsiteCriticalErrorStatus.unknown
-        ? const Color(0xFFE9B949)
-        : const Color(0xFF54D68B);
+  static Color _errorColor(
+    WebsiteCriticalErrorStatus status,
+  ) {
+    switch (status) {
+      case WebsiteCriticalErrorStatus.noneReported:
+        return const Color(0xFF54D68B);
+
+      case WebsiteCriticalErrorStatus.errorsReported:
+        return const Color(0xFFE06C75);
+
+      case WebsiteCriticalErrorStatus.unknown:
+        return const Color(0xFFE9B949);
+    }
   }
 }
 
 class _WebsiteTypeBadge extends StatelessWidget {
-  const _WebsiteTypeBadge({required this.type});
+  const _WebsiteTypeBadge({
+    required this.type,
+  });
 
   final WebsiteType type;
 
   @override
   Widget build(BuildContext context) {
     final bool owner = type == WebsiteType.owner;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 6,
+      ),
       decoration: BoxDecoration(
-        color: owner ? const Color(0xFF102B35) : const Color(0xFF202534),
+        color: owner
+            ? const Color(0xFF102B35)
+            : const Color(0xFF202534),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
@@ -357,7 +541,9 @@ class _WebsiteTypeBadge extends StatelessWidget {
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
-          color: owner ? const Color(0xFF00D9F5) : const Color(0xFFC0C8D0),
+          color: owner
+              ? const Color(0xFF00D9F5)
+              : const Color(0xFFC0C8D0),
         ),
       ),
     );
@@ -380,15 +566,24 @@ class _StatusLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 11),
+      padding: const EdgeInsets.only(
+        bottom: 11,
+      ),
       child: Row(
         children: [
-          Icon(icon, size: 17, color: const Color(0xFF82909B)),
+          Icon(
+            icon,
+            size: 17,
+            color: const Color(0xFF82909B),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(fontSize: 12, color: Color(0xFFAEB9C1)),
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFFAEB9C1),
+              ),
             ),
           ),
           Flexible(
@@ -409,22 +604,32 @@ class _StatusLine extends StatelessWidget {
 }
 
 class _CapabilityChip extends StatelessWidget {
-  const _CapabilityChip({required this.label});
+  const _CapabilityChip({
+    required this.label,
+  });
 
   final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 5,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFF111D26),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFF20313D)),
+        border: Border.all(
+          color: const Color(0xFF20313D),
+        ),
       ),
       child: Text(
         label,
-        style: const TextStyle(fontSize: 10, color: Color(0xFF9EABB4)),
+        style: const TextStyle(
+          fontSize: 10,
+          color: Color(0xFF9EABB4),
+        ),
       ),
     );
   }
