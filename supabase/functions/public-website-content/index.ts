@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
+  isWebsiteMediaPath,
   parsePublicWebsiteContentRequest,
   publicWebsiteContentResponse,
 } from "../_shared/public_website_content.ts";
@@ -28,7 +29,7 @@ async function signedPublishedMedia(
   });
   const { data } = await storage
     .from("media")
-    .select("id, storage_path, title, metadata")
+    .select("id, tenant_id, website_id, storage_path, title, metadata")
     .in("id", ids)
     .eq("metadata->>published", "true");
   if (!data) return [];
@@ -38,7 +39,10 @@ async function signedPublishedMedia(
     const type = typeof (metadata as Record<string, unknown>).type === "string"
       ? (metadata as Record<string, unknown>).type
       : "";
-    if (!/^(image|video|audio)\//.test(type)) return { id: item.id, title: item.title, metadata };
+    if (!/^(image|video|audio)\//.test(type) ||
+      !isWebsiteMediaPath(item.storage_path, item.tenant_id, item.website_id)) {
+      return { id: item.id, title: item.title, metadata };
+    }
     const { data: signed } = await storage.storage
       .from("website-media")
       .createSignedUrl(item.storage_path, 900);

@@ -76,6 +76,17 @@ function publicContent(value: unknown, depth = 0): unknown {
   );
 }
 
+export function isWebsiteMediaPath(
+  path: unknown,
+  tenantId: string,
+  websiteId: string,
+): path is string {
+  if (typeof path !== 'string') return false;
+  const [tenant, website, ...segments] = path.split('/');
+  return tenant === tenantId && website === websiteId && segments.length > 0
+    && segments.every((segment) => /^[A-Za-z0-9._-]+$/.test(segment) && segment !== '.' && segment !== '..');
+}
+
 export function parsePublicWebsiteContentRequest(input: Record<string, unknown>): string | null {
   if (Object.keys(input).length !== 1 || !Object.hasOwn(input, 'domain')) return null;
   const domain = string(input.domain, 255)?.toLowerCase();
