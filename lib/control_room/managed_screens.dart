@@ -675,7 +675,15 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
       type: FileType.any,
       webOptions: mediaPickerWebOptions(),
     );
-    if (files.isEmpty) return;
+    if (files.isEmpty) {
+      if (mounted) {
+        _showMessage(
+          'No photo was received from the picker. On iPhone, try selecting '
+          'one downloaded photo, or open Control Room in Safari.',
+        );
+      }
+      return;
+    }
 
     final accepted = <({PlatformFile file, String mediaType})>[];
     final rejected = <String>[];
