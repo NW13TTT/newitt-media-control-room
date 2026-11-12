@@ -15,6 +15,14 @@ function imageType(bytes) {
   return null;
 }
 
+function photoName(request) {
+  try {
+    return decodeURIComponentphotoName(request);
+  } catch {
+    return "Photo";
+  }
+}
+
 function json(data, status) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
 }
@@ -93,7 +101,7 @@ export async function uploadWebsitePhoto(request, env) {
       tenant_id: website.tenant_id,
       website_id: website.id,
       storage_path: path,
-      title: (request.headers.get("X-Photo-Name") || "Photo").slice(0, 200),
+      title: photoName(request),
       metadata: { type: "image/webp", storage_provider: "r2" },
     }),
   });

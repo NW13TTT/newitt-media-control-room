@@ -1,4 +1,8 @@
+import 'dart:convert';
 import 'dart:math';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:http/http.dart' as http;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -927,6 +931,18 @@ class SupabaseControlRoomRepository
         'the selected website is not available to this account',
       );
     }
+    const cloudflarePhotos = bool.fromEnvironment('CLOUDFLARE_PHOTO_UPLOADS');
+    if (kIsWeb &&
+        cloudflarePhotos &&
+        const {
+          'image/jpeg',
+          'image/png',
+          'image/heic',
+          'image/heif',
+        }.contains(request.mediaType)) {
+      await _uploadCloudflarePhoto(request);
+      return;
+    }
     final safeName = request.fileName.replaceAll(
       RegExp(r'[^A-Za-z0-9._-]'),
       '_',
@@ -942,10 +958,7 @@ class SupabaseControlRoomRepository
             fileOptions: FileOptions(contentType: request.mediaType),
           );
     } catch (error) {
-      throw MediaUploadException(
-        MediaUploadStage.storage,
-        _safeReason(error),
-      );
+      throw MediaUploadException(MediaUploadStage.storage, _safeReason(error));
     }
     try {
       await client.from('media').insert({
@@ -957,11 +970,44 @@ class SupabaseControlRoomRepository
       });
     } catch (error) {
       await client.storage.from('website-media').remove([path]);
-      throw MediaUploadException(
-        MediaUploadStage.metadata,
-        _safeReason(error),
+      throw MediaUploadException(MediaUploadStage.metadata, _safeReason(error));
+    }
+  }
+
+  Future<void> _uploadCloudflarePhoto(MediaUploadRequest request) async {
+    final session = client.auth.currentSession;
+    if (session == null) {
+      throw const MediaUploadException(
+        MediaUploadStage.authorisation,
+        'sign in again to upload a photo',
       );
     }
+    final response = await http.post(
+      Uri.base.resolve('/api/media/photos'),
+      headers: {
+        'Authorization': 'Bearer ${session.accessToken}',
+        'Content-Type': 'application/octet-stream',
+        'X-Website-Id': request.websiteId,
+        'X-Photo-Name': Uri.encodeComponent(request.fileName),
+      },
+      body: request.bytes,
+    );
+    if (response.statusCode == 201) return;
+    String reason = 'Photo upload failed. Try again.';
+    try {
+      final body = jsonDecode(response.body);
+      if (body is Map && body['error'] is String) {
+        reason = body['error'] as String;
+      }
+    } on FormatException {
+      // The edge may return a non-JSON response when the service is down.
+    }
+    throw MediaUploadException(
+      response.statusCode == 401 || response.statusCode == 403
+          ? MediaUploadStage.authorisation
+          : MediaUploadStage.storage,
+      reason,
+    );
   }
 
   static String _safeReason(Object error) => switch (error) {
