@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
+
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart'
     show PostgrestException, StorageException;
 
@@ -7,7 +9,8 @@ import '../auth/auth_models.dart';
 import '../backend/control_room_repository.dart';
 import 'content_section_editor.dart';
 import 'contact_enquiries_screen.dart';
-import 'media_picker_options.dart';
+import 'media_picker.dart';
+import 'media_selection.dart';
 import 'website_feature_inventory_screen.dart';
 import '../core/layout/responsive.dart';
 import '../help/smart_help_button.dart';
@@ -623,6 +626,16 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
   int _uploadedCount = 0;
   int _uploadTotal = 0;
   String? _deletingId;
+  String? _uploadWebsiteId;
+
+  String? get _selectedUploadWebsiteId {
+    final websites = widget.websites.where((website) => website.id != null);
+    if (websites.length == 1) return websites.first.id;
+    return websites.any((website) => website.id == _uploadWebsiteId)
+        ? _uploadWebsiteId
+        : null;
+  }
+
   Future<void> _edit(MediaRecord item) async {
     final saved = await showDialog<bool>(
       context: context,
@@ -668,75 +681,15 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
   }
 
   Future<void> _upload() async {
-    if (_uploading || widget.websites.isEmpty) return;
-    // An unrestricted picker is the only variant iOS, iPadOS and Android all
-    // open on the photo library and camera; the selection is checked below.
-    final files = await FilePicker.pickFiles(
-      type: FileType.any,
-      webOptions: mediaPickerWebOptions(),
-    );
-    if (files.isEmpty) return;
-
-    final accepted = <({PlatformFile file, String mediaType})>[];
-    final rejected = <String>[];
-    for (final file in files) {
-      final mediaType = _mediaType(file.extension);
-      if (mediaType == null) {
-        rejected.add('${file.name} is not a supported format');
-        continue;
-      }
-      final size = await file.length();
-      if (size > _maxUploadBytes) {
-        rejected.add('${file.name} is ${_sizeLabel(size)}');
-        continue;
-      }
-      accepted.add((file: file, mediaType: mediaType));
-    }
-
-    if (rejected.isNotEmpty && mounted) {
-      _showMessage(
-        '${rejected.join('. ')}. Photos may be JPG, PNG, HEIC, WebP or GIF, '
-        'video MP4 or MOV, audio MP3, M4A or WAV, up to ${_sizeLabel(_maxUploadBytes)} each.',
-      );
-    }
-    if (accepted.isEmpty) return;
-
-    setState(() {
-      _uploading = true;
-      _uploadedCount = 0;
-      _uploadTotal = accepted.length;
-    });
-    final failures = <String>[];
+    final websiteId = _selectedUploadWebsiteId;
+    if (_uploading || websiteId == null) return;
+    setState(() => _uploading = true);
     try {
-      for (final entry in accepted) {
-        try {
-          final bytes = await entry.file.readAsBytes();
-          if (bytes.isEmpty) {
-            throw const FormatException(
-              'the file could not be read. If it is stored in the cloud, '
-              'download it to this device first.',
-            );
-          }
-          await widget.repository!.uploadMedia(
-            MediaUploadRequest(
-              websiteId: widget.websites.first.id!,
-              fileName: entry.file.name,
-              bytes: bytes,
-              mediaType: entry.mediaType,
-            ),
-          );
-          if (mounted) setState(() => _uploadedCount++);
-        } catch (error) {
-          failures.add('${entry.file.name}: ${_failureReason(error)}');
-        }
-      }
-      if (mounted) {
-        _showMessage(
-          failures.isEmpty
-              ? 'Media uploaded.'
-              : 'Uploaded $_uploadedCount of ${accepted.length}. ${failures.first}',
-        );
-      }
+      await _pickAndUpload(websiteId);
+    } on TimeoutException {
+      if (mounted) _showMessage('The photo picker did not respond. Try again.');
+    } catch (_) {
+      if (mounted) _showMessage('Could not open the photo picker. Try again.');
     } finally {
       if (mounted) {
         setState(() {
@@ -748,12 +701,89 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
     }
   }
 
+  Future<void> _pickAndUpload(String websiteId) async {
+    final files = await pickMedia();
+    if (!mounted) return;
+    if (files.isEmpty) {
+      if (mounted) {
+        _showMessage(
+          'No photo was received from the picker. On iPhone, try selecting '
+          'one downloaded photo, or open Control Room in Safari.',
+        );
+      }
+      return;
+    }
+
+    final accepted = <({MediaSelection file, String mediaType})>[];
+    final rejected = <String>[];
+    for (final file in files) {
+      final mediaType = _mediaType(file.extension);
+      if (mediaType == null) {
+        rejected.add('${file.name} is not a supported format');
+        continue;
+      }
+      final size = file.length;
+      if (size > _maxUploadBytes) {
+        rejected.add('${file.name} is ${_sizeLabel(size)}');
+        continue;
+      }
+      accepted.add((file: file, mediaType: mediaType));
+    }
+
+    if (rejected.isNotEmpty && mounted) {
+      _showMessage(
+        '${rejected.join('. ')}. Photos may be JPG, PNG, HEIC, HEIF, WebP or GIF, '
+        'video MP4 or MOV, audio MP3, M4A or WAV, up to ${_sizeLabel(_maxUploadBytes)} each.',
+      );
+    }
+    if (accepted.isEmpty) return;
+
+    setState(() {
+      _uploadedCount = 0;
+      _uploadTotal = accepted.length;
+    });
+    final failures = <String>[];
+    for (final entry in accepted) {
+      try {
+        final bytes = await entry.file.readBytes().timeout(
+          const Duration(seconds: 45),
+        );
+        if (bytes.isEmpty) {
+          throw const FormatException(
+            'the file could not be read. If it is stored in the cloud, '
+            'download it to this device first.',
+          );
+        }
+        await widget.repository!.uploadMedia(
+          MediaUploadRequest(
+            websiteId: websiteId,
+            fileName: entry.file.name,
+            bytes: bytes,
+            mediaType: entry.mediaType,
+          ),
+        );
+        if (mounted) setState(() => _uploadedCount++);
+      } catch (error) {
+        failures.add('${entry.file.name}: ${_failureReason(error)}');
+      }
+    }
+    if (mounted) {
+      _showMessage(
+        failures.isEmpty
+            ? 'Media uploaded.'
+            : 'Uploaded $_uploadedCount of ${accepted.length}. ${failures.first}',
+      );
+    }
+  }
+
   void _showMessage(String message) => ScaffoldMessenger.of(
     context,
   ).showSnackBar(SnackBar(content: Text(message), duration: _messageDuration));
 
   String _failureReason(Object error) {
     final reason = switch (error) {
+      TimeoutException() =>
+        'The file took too long to read. Download it from iCloud and retry.',
       MediaUploadException() => error.toString(),
       StorageException(:final message) => message,
       PostgrestException(:final message) => message,
@@ -773,6 +803,25 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
         ? const _UnavailableState()
         : Column(
             children: [
+              if (widget.websites
+                      .where((website) => website.id != null)
+                      .length >
+                  1)
+                DropdownButton<String>(
+                  value: _selectedUploadWebsiteId,
+                  hint: const Text('Choose a website for uploads'),
+                  onChanged: _uploading
+                      ? null
+                      : (id) => setState(() => _uploadWebsiteId = id),
+                  items: [
+                    for (final website in widget.websites)
+                      if (website.id != null)
+                        DropdownMenuItem(
+                          value: website.id,
+                          child: Text(website.name),
+                        ),
+                  ],
+                ),
               Align(
                 alignment: Alignment.centerRight,
                 child: Row(
@@ -783,7 +832,9 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
                       tooltip: 'Media Library help',
                     ),
                     FilledButton.icon(
-                      onPressed: _uploading ? null : _upload,
+                      onPressed: _uploading || _selectedUploadWebsiteId == null
+                          ? null
+                          : _upload,
                       icon: _uploading
                           ? const SizedBox(
                               width: 18,
@@ -793,7 +844,9 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
                           : const Icon(Icons.upload_file),
                       label: Text(
                         _uploading
-                            ? 'Uploading $_uploadedCount/$_uploadTotal...'
+                            ? (_uploadTotal == 0
+                                  ? 'Waiting for photo selection…'
+                                  : 'Uploading $_uploadedCount/$_uploadTotal…')
                             : 'Upload media',
                       ),
                     ),
@@ -823,8 +876,7 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
                     return const _EmptyState(
                       icon: Icons.perm_media_outlined,
                       title: 'No media found',
-                      message:
-                          'Upload images, video or audio to use them in this website.',
+                      message: 'Upload images, video or audio to use them in this website.',
                     );
                   }
                   final categories =
