@@ -16,6 +16,7 @@ async function signedPublishedMedia(
   serviceRoleKey: string | undefined,
   url: string,
   media: unknown,
+  domain: string,
 ) {
   if (!serviceRoleKey || !Array.isArray(media) || media.length === 0) return [];
   const ids = media
@@ -26,10 +27,18 @@ async function signedPublishedMedia(
   const storage = createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  const { data: website } = await storage.from("websites")
+    .select("id, tenant_id")
+    .eq("domain", domain)
+    .in("site_lifecycle", ["APPROVED", "PUBLISHED"])
+    .maybeSingle();
+  if (!website) return [];
   const { data } = await storage
     .from("media")
     .select("id, storage_path, title, metadata")
     .in("id", ids)
+    .eq("website_id", website.id)
+    .eq("tenant_id", website.tenant_id)
     .eq("metadata->>published", "true");
   if (!data) return [];
 
@@ -39,6 +48,19 @@ async function signedPublishedMedia(
       ? (metadata as Record<string, unknown>).type
       : "";
     if (!/^(image|video|audio)\//.test(type)) return { id: item.id, title: item.title, metadata };
+    if ((metadata as Record<string, unknown>).storage_provider === "r2") {
+      const origin = Deno.env.get("CONTROL_ROOM_MEDIA_ORIGIN");
+      let photoUrl: URL | null = null;
+      try {
+        if (origin?.startsWith("https://")) {
+          photoUrl = new URL("/api/media/photos/" + item.id, origin);
+        }
+      } catch {
+        // A bad media origin must not interrupt existing site content.
+      }
+      photoUrl?.searchParams.set("domain", domain);
+      return { id: item.id, title: item.title, metadata, signedUrl: photoUrl?.href ?? null };
+    }
     const { data: signed } = await storage.storage
       .from("website-media")
       .createSignedUrl(item.storage_path, 900);
@@ -93,6 +115,7 @@ Deno.serve(async (request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
     url,
     content.media,
+    domain,
   );
   return reply(publicWebsiteContentResponse({
     website: content.website ?? {},
