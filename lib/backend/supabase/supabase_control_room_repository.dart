@@ -904,7 +904,16 @@ class SupabaseControlRoomRepository
       rows.map((row) async {
         final metadata = Map<String, dynamic>.from(row['metadata'] as Map);
         final storagePath = row['storage_path'] as String;
-        if ('${metadata['type'] ?? ''}'.startsWith('image/')) {
+        metadata.remove('display_url');
+        final id = row['id'] as String;
+        final session = client.auth.currentSession;
+        Map<String, String>? previewHeaders;
+        if (metadata['storage_provider'] == 'r2') {
+          if (session != null && _photoUri(id).scheme.startsWith('http')) {
+            metadata['display_url'] = _photoUri(id).toString();
+            previewHeaders = {'Authorization': 'Bearer ${session.accessToken}'};
+          }
+        } else if ('${metadata['type'] ?? ''}'.startsWith('image/')) {
           try {
             metadata['display_url'] = await client.storage
                 .from('website-media')
@@ -912,7 +921,8 @@ class SupabaseControlRoomRepository
           } catch (_) {}
         }
         return MediaRecord(
-          id: row['id'] as String,
+          id: id,
+          previewHeaders: previewHeaders,
           websiteId: row['website_id'] as String,
           storagePath: storagePath,
           title: row['title'] as String?,
@@ -983,7 +993,7 @@ class SupabaseControlRoomRepository
       );
     }
     final response = await http.post(
-      Uri.base.resolve('/api/media/photos'),
+      _photoUri(),
       headers: {
         'Authorization': 'Bearer ${session.accessToken}',
         'Content-Type': 'application/octet-stream',
@@ -1021,14 +1031,46 @@ class SupabaseControlRoomRepository
     required String id,
     required String title,
     required Map<String, dynamic> metadata,
-  }) => client
-      .from('media')
-      .update({'title': title.trim(), 'metadata': metadata})
-      .eq('id', id);
+  }) {
+    final storedMetadata = Map<String, dynamic>.of(metadata)
+      ..remove('display_url');
+    return client
+        .from('media')
+        .update({'title': title.trim(), 'metadata': storedMetadata})
+        .eq('id', id);
+  }
+
+  static Uri _photoUri([String? id]) {
+    const origin = String.fromEnvironment('CONTROL_ROOM_MEDIA_ORIGIN');
+    final base = kIsWeb || origin.isEmpty ? Uri.base : Uri.parse(origin);
+    return base.resolve(
+      id == null ? '/api/media/photos' : '/api/media/photos/$id',
+    );
+  }
 
   @override
-  Future<void> deleteMedia(String id) =>
-      client.functions.invoke('delete-media', body: {'mediaId': id});
+  Future<void> deleteMedia(String id) async {
+    final row = await client
+        .from('media')
+        .select('metadata')
+        .eq('id', id)
+        .single();
+    final metadata = row['metadata'] as Map;
+    if (metadata['storage_provider'] != 'r2') {
+      await client.functions.invoke('delete-media', body: {'mediaId': id});
+      return;
+    }
+    final session = client.auth.currentSession;
+    if (session == null)
+      throw StateError('Sign in again to delete this photo.');
+    final response = await http.delete(
+      _photoUri(id),
+      headers: {'Authorization': 'Bearer ${session.accessToken}'},
+    );
+    if (response.statusCode != 204) {
+      throw StateError('Photo removal failed. Refresh the library and retry.');
+    }
+  }
 
   @override
   Future<List<SocialLinkRecord>> listSocialLinks() async {
