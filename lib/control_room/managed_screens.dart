@@ -988,6 +988,7 @@ class _MediaLibraryItem extends StatelessWidget {
               child: canPreview
                   ? Image.network(
                       displayUrl,
+                      headers: item.previewHeaders,
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) =>
                           const _MediaTypeIcon(type: 'image/'),
