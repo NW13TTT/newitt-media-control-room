@@ -1,12 +1,15 @@
-import { uploadWebsitePhoto } from "./media-upload-worker.mjs";
+import { uploadWebsitePhoto, websitePhoto } from "./media-upload-worker.mjs";
 
 export default {
   async fetch(request, env) {
-    if (new URL(request.url).pathname === "/api/media/photos") {
+    const path = new URL(request.url).pathname;
+    const photo = /^\/api\/media\/photos\/([^/]+)$/.exec(path);
+    if (path === "/api/media/photos" || photo) {
       try {
-        return await uploadWebsitePhoto(request, env);
+        return photo ? await websitePhoto(request, env, photo[1])
+          : await uploadWebsitePhoto(request, env);
       } catch {
-        return Response.json({ error: "Photo upload failed. Please retry." }, {
+        return Response.json({ error: "Photo request failed. Please retry." }, {
           status: 503,
           headers: { "Cache-Control": "no-store" },
         });
