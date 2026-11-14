@@ -18,6 +18,8 @@ WRANGLER_CONFIG="wrangler.control-room.jsonc"
 PHOTO_UPLOADS=false
 if [[ "${1:-}" == "--media-staging-build" ]]; then
   CONFIG_FILE="config/media-staging.json"
+  AUTH_STORAGE_SCOPE="newitt-control-room-media-staging"
+  PASSWORD_RESET_REDIRECT_URL="https://newitt-media-control-room-media-staging.ian-newitt.workers.dev/auth-callback"
   PHOTO_UPLOADS=true
 fi
 
@@ -62,4 +64,4 @@ if [[ "${1:-}" == "--build-only" || "${1:-}" == "--media-staging-build" ]]; then
 fi
 
 echo "==> wrangler deploy --config $WRANGLER_CONFIG"
-wrangler deploy --config "$WRANGLER_CONFIG"
+wrangler deploy --env="" --config "$WRANGLER_CONFIG"
