@@ -59,34 +59,38 @@ export async function uploadWebsitePhoto(request, env) {
     return json({ error: "You cannot upload to this website." }, 403);
   }
 
-  const length = Number(request.headers.get("Content-Length"));
-  if (!Number.isSafeInteger(length) || length < 1 || length > MAX_BYTES || !request.body) {
+  const declaredLength = request.headers.get("Content-Length");
+  const length = declaredLength === null ? null : Number(declaredLength);
+  if (!request.body || (length !== null &&
+      (!Number.isSafeInteger(length) || length < 1 || length > MAX_BYTES))) {
     return json({ error: "Choose a photo up to 50 MB." }, 413);
   }
   const reader = request.body.getReader();
-  const bytes = new Uint8Array(length);
-  let offset = 0;
+  const chunks = [];
+  let size = 0;
   try {
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      if (offset + value.length > length) {
+      size += value.length;
+      if (size > MAX_BYTES || (length !== null && size > length)) {
         await reader.cancel();
         return json({ error: "The photo is larger than expected." }, 413);
       }
-      bytes.set(value, offset);
-      offset += value.length;
+      chunks.push(value);
     }
   } finally {
     reader.releaseLock();
   }
-  if (offset !== length || !imageType(bytes)) {
+  const photo = new Blob(chunks);
+  const header = new Uint8Array(await photo.slice(0, 32).arrayBuffer());
+  if ((length !== null && size !== length) || !imageType(header)) {
     return json({ error: "Choose a valid JPEG, PNG, HEIC or HEIF photo." }, 415);
   }
 
   let image;
   try {
-    image = await env.IMAGES.input(new Blob([bytes]).stream())
+    image = await env.IMAGES.input(photo.stream())
       .output({ format: "image/webp" });
   } catch {
     return json({ error: "The photo could not be decoded. Try exporting it as JPEG." }, 422);
@@ -114,4 +118,77 @@ export async function uploadWebsitePhoto(request, env) {
     return json({ error: "Could not add the photo to the media library." }, 403);
   }
   return json({ path }, 201);
+}
+
+export async function websitePhoto(request, env, mediaId) {
+  if (!env.WEBSITE_MEDIA || !env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY) {
+    return json({ error: "Photos are unavailable." }, 503);
+  }
+  if (!UUID.test(mediaId)) return json({ error: "Photo not found." }, 404);
+  const url = new URL(request.url);
+  const domain = url.searchParams.get("domain");
+  const authorization = request.headers.get("Authorization");
+  const headers = { apikey: env.SUPABASE_PUBLISHABLE_KEY };
+  if (domain === null && !authorization?.startsWith("Bearer ")) {
+    return json({ error: "Sign in to access this photo." }, 401);
+  }
+  if (domain !== null && request.method !== "GET") {
+    return json({ error: "Method not allowed." }, 405);
+  }
+  if (!["GET", "DELETE"].includes(request.method)) {
+    return json({ error: "Method not allowed." }, 405);
+  }
+
+  const supabase = new URL(env.SUPABASE_URL);
+  const lookup = new URL("/rest/v1/media", supabase);
+  lookup.search = new URLSearchParams({
+    id: "eq." + mediaId, select: "storage_path,tenant_id,website_id,metadata",
+  });
+  let media;
+  if (domain !== null) {
+    const published = await fetch(new URL("/rest/v1/rpc/get_published_r2_photo", supabase), {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ requested_domain: domain, requested_media_id: mediaId }),
+    });
+    if (!published.ok) return json({ error: "Photo unavailable." }, 503);
+    media = await published.json();
+  } else {
+    headers.Authorization = authorization;
+    const response = await fetch(lookup, { headers });
+    if (response.status === 401) return json({ error: "Sign in again." }, 401);
+    if (!response.ok) return json({ error: "Photo unavailable." }, 503);
+    [media] = await response.json();
+  }
+  const path = media?.storage_path?.split("/");
+  if (media?.metadata?.storage_provider !== "r2" || path?.length !== 3 ||
+      path[0] !== media.tenant_id || path[1] !== media.website_id ||
+      !path[2].endsWith(".webp") || !UUID.test(path[2].slice(0, -5))) {
+    return json({ error: "Photo not found." }, 404);
+  }
+  if (request.method === "DELETE") {
+    const tenant = await fetch(new URL("/rest/v1/rpc/current_tenant_id", supabase), {
+      method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: "{}",
+    });
+    if (!tenant.ok || await tenant.json() !== media.tenant_id) {
+      return json({ error: "Photo not found." }, 404);
+    }
+    // Keep the row available for retry if object removal fails.
+    await env.WEBSITE_MEDIA.delete(media.storage_path);
+    lookup.searchParams.set("select", "id");
+    headers.Prefer = "return=representation";
+    lookup.searchParams.set("storage_path", "eq." + media.storage_path);
+    const deleted = await fetch(lookup, { method: "DELETE", headers });
+    return deleted.ok && (await deleted.json()).length === 1 ? new Response(null, { status: 204 })
+      : json({ error: "Refresh the library and retry removal." }, 503);
+  }
+  const object = await env.WEBSITE_MEDIA.get(media.storage_path);
+  if (!object) return json({ error: "Photo not found." }, 404);
+  return new Response(object.body, {
+    headers: {
+      "Content-Type": "image/webp",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
