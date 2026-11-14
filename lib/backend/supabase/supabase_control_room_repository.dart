@@ -1061,8 +1061,9 @@ class SupabaseControlRoomRepository
       return;
     }
     final session = client.auth.currentSession;
-    if (session == null)
+    if (session == null) {
       throw StateError('Sign in again to delete this photo.');
+    }
     final response = await http.delete(
       _photoUri(id),
       headers: {'Authorization': 'Bearer ${session.accessToken}'},
