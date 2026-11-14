@@ -15,6 +15,11 @@ CONFIG_FILE="config/local.json"
 AUTH_STORAGE_SCOPE="newitt-control-room"
 PASSWORD_RESET_REDIRECT_URL="https://newitt-media-control-room.ian-newitt.workers.dev/auth-callback"
 WRANGLER_CONFIG="wrangler.control-room.jsonc"
+PHOTO_UPLOADS=false
+if [[ "${1:-}" == "--media-staging-build" ]]; then
+  CONFIG_FILE="config/media-staging.json"
+  PHOTO_UPLOADS=true
+fi
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "Missing $CONFIG_FILE. It supplies SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY and is not in source control." >&2
@@ -33,9 +38,11 @@ flutter analyze
 
 echo "==> flutter test"
 flutter test
+node --test test/media_upload_worker_test.mjs
 
 echo "==> flutter build web --release"
 flutter build web --release \
+  --dart-define=CLOUDFLARE_PHOTO_UPLOADS="$PHOTO_UPLOADS" \
   --dart-define-from-file="$CONFIG_FILE" \
   --dart-define=SUPABASE_AUTH_STORAGE_SCOPE="$AUTH_STORAGE_SCOPE" \
   --dart-define=SUPABASE_PASSWORD_RESET_REDIRECT_URL="$PASSWORD_RESET_REDIRECT_URL"
@@ -49,7 +56,7 @@ for expected in "$AUTH_STORAGE_SCOPE" "$PASSWORD_RESET_REDIRECT_URL"; do
 done
 echo "    auth storage scope and password reset callback present"
 
-if [[ "${1:-}" == "--build-only" ]]; then
+if [[ "${1:-}" == "--build-only" || "${1:-}" == "--media-staging-build" ]]; then
   echo "==> build only, not deploying"
   exit 0
 fi
