@@ -5,6 +5,21 @@
   "compatibility_date": "2026-09-06",
   "assets": {
     "directory": "./build/web",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/media/photos", "/api/media/photos/*"]
+  },
+  "env": {
+    "media-staging": {
+      "name": "newitt-media-control-room-media-staging",
+      "assets": {
+        "directory": "./build/web",
+        "binding": "ASSETS",
+        "run_worker_first": ["/api/media/photos", "/api/media/photos/*"]
+      },
+      "r2_buckets": [
+        { "binding": "WEBSITE_MEDIA", "bucket_name": "newitt-control-room-media-staging" }
+      ],
+      "images": { "binding": "IMAGES" }
+    }
   }
 }
