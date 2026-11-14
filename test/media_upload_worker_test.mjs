@@ -10,12 +10,17 @@ test("validates tenant and photo before writing, and cleans up rejected metadata
   const writes = [];
   const deletes = [];
   const oldFetch = globalThis.fetch;
-  globalThis.fetch = async url => {
+  globalThis.fetch = async (url, options) => {
     switch (url.pathname) {
       case "/auth/v1/user": return Response.json({ id });
-      case "/rest/v1/rpc/current_tenant_id": return Response.json(tenant);
+      case "/rest/v1/rpc/current_tenant_id":
+        assert.equal(options.method, "POST");
+        assert.deepEqual(JSON.parse(options.body), {});
+        return Response.json(tenant);
       case "/rest/v1/websites": return Response.json([{ id, tenant_id: mode === "foreign" ? id : tenant }]);
-      case "/rest/v1/media": return new Response(null, { status: mode === "denied" ? 403 : 201 });
+      case "/rest/v1/media":
+        assert.equal(JSON.parse(options.body).title, "Moira Furnace.jpg");
+        return new Response(null, { status: mode === "denied" ? 403 : 201 });
       default: throw new Error(url.pathname);
     }
   };
@@ -29,7 +34,7 @@ test("validates tenant and photo before writing, and cleans up rejected metadata
     IMAGES: { input: () => ({ output: async () => ({ response: () => new Response("webp fixture") }) }) },
   };
   const upload = bytes => uploadWebsitePhoto(new Request("https://worker.example/api/media/photos", {
-    method: "POST", headers: { Authorization: "Bearer test", "X-Website-Id": id, "Content-Length": bytes.length },
+    method: "POST", headers: { Authorization: "Bearer test", "X-Website-Id": id, "X-Photo-Name": "Moira%20Furnace.jpg", "Content-Length": bytes.length },
     body: new Uint8Array(bytes),
   }), env);
   try {
