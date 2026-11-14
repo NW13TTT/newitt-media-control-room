@@ -285,6 +285,7 @@ class MediaRecord {
     required this.title,
     required this.metadata,
     required this.createdAt,
+    this.previewHeaders,
   });
 
   final String id;
@@ -293,6 +294,7 @@ class MediaRecord {
   final String? title;
   final Map<String, dynamic> metadata;
   final DateTime? createdAt;
+  final Map<String, String>? previewHeaders;
 }
 
 class SupportMessageRecord {
@@ -341,7 +343,8 @@ class MediaUploadException implements Exception {
   final String reason;
 
   @override
-  String toString() => 'failed while ${stage.description}'
+  String toString() =>
+      'failed while ${stage.description}'
       '${reason.isEmpty ? '' : ' ($reason)'}';
 }
 
