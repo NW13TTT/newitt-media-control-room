@@ -17,7 +17,7 @@ function imageType(bytes) {
 
 function photoName(request) {
   try {
-    return decodeURIComponentphotoName(request);
+    return decodeURIComponent(request.headers.get("X-Photo-Name") || "Photo");
   } catch {
     return "Photo";
   }
@@ -43,7 +43,11 @@ export async function uploadWebsitePhoto(request, env) {
 
   // The caller's token applies the websites and media RLS policies.
   const profileLookup = new URL("/rest/v1/rpc/current_tenant_id", supabase);
-  const profileResponse = await fetch(profileLookup, { headers });
+  const profileResponse = await fetch(profileLookup, {
+    method: "POST",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: "{}",
+  });
   if (!profileResponse.ok) return json({ error: "Could not verify your tenant." }, 403);
   const tenantId = await profileResponse.json();
   const lookup = new URL("/rest/v1/websites", supabase);
