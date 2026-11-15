@@ -95,7 +95,8 @@ export async function uploadWebsitePhoto(request, env) {
   } catch {
     return json({ error: "The photo could not be decoded. Try exporting it as JPEG." }, 422);
   }
-  const path = website.tenant_id + "/" + website.id + "/" + crypto.randomUUID() + ".webp";
+  const mediaId = crypto.randomUUID();
+  const path = website.tenant_id + "/" + website.id + "/" + mediaId + ".webp";
   const converted = image.response();
   if (!converted.ok || !converted.body) return json({ error: "Photo conversion failed." }, 422);
   await env.WEBSITE_MEDIA.put(path, converted.body, {
@@ -106,6 +107,7 @@ export async function uploadWebsitePhoto(request, env) {
     method: "POST",
     headers: { ...headers, "Content-Type": "application/json" },
     body: JSON.stringify({
+      id: mediaId,
       tenant_id: website.tenant_id,
       website_id: website.id,
       storage_path: path,
@@ -163,7 +165,7 @@ export async function websitePhoto(request, env, mediaId) {
   const path = media?.storage_path?.split("/");
   if (media?.metadata?.storage_provider !== "r2" || path?.length !== 3 ||
       path[0] !== media.tenant_id || path[1] !== media.website_id ||
-      !path[2].endsWith(".webp") || !UUID.test(path[2].slice(0, -5))) {
+      path[2] !== mediaId + ".webp") {
     return json({ error: "Photo not found." }, 404);
   }
   if (request.method === "DELETE") {
