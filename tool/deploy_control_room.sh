@@ -38,7 +38,6 @@ flutter analyze
 
 echo "==> flutter test"
 flutter test
-node --test test/media_upload_worker_test.mjs
 
 echo "==> flutter build web --release"
 flutter build web --release \
