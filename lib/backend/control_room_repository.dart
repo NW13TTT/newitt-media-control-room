@@ -285,7 +285,6 @@ class MediaRecord {
     required this.title,
     required this.metadata,
     required this.createdAt,
-    this.previewHeaders,
   });
 
   final String id;
@@ -294,7 +293,6 @@ class MediaRecord {
   final String? title;
   final Map<String, dynamic> metadata;
   final DateTime? createdAt;
-  final Map<String, String>? previewHeaders;
 }
 
 class SupportMessageRecord {
@@ -617,6 +615,10 @@ class SecuritySummaryRecord {
 
   final int recentAuditEvents;
   final DateTime? latestAuditEventAt;
+}
+
+abstract interface class MediaStorageUsageRepository {
+  Future<({int usedBytes, int quotaBytes})?> mediaStorageUsage();
 }
 
 abstract interface class ControlRoomRepository {
