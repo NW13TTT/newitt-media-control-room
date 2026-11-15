@@ -6,7 +6,10 @@ import '../../auth/auth_models.dart';
 import '../control_room_repository.dart';
 
 class SupabaseControlRoomRepository
-    implements ControlRoomRepository, ControlRoomRepositoryFactory {
+    implements
+        ControlRoomRepository,
+        ControlRoomRepositoryFactory,
+        MediaStorageUsageRepository {
   SupabaseControlRoomRepository(this.client, [this._profile]);
 
   final SupabaseClient client;
@@ -888,6 +891,16 @@ class SupabaseControlRoomRepository
       client.from('website_content').delete().eq('id', id);
 
   @override
+  Future<({int usedBytes, int quotaBytes})?> mediaStorageUsage() async {
+    final result = await client.rpc('website_media_storage_usage');
+    if (result is! Map) return null;
+    return (
+      usedBytes: (result['used_bytes'] as num).toInt(),
+      quotaBytes: (result['quota_bytes'] as num).toInt(),
+    );
+  }
+
+  @override
   Future<List<MediaRecord>> listMedia({String? query}) async {
     var request = client
         .from('media')
@@ -900,7 +913,10 @@ class SupabaseControlRoomRepository
       rows.map((row) async {
         final metadata = Map<String, dynamic>.from(row['metadata'] as Map);
         final storagePath = row['storage_path'] as String;
-        if ('${metadata['type'] ?? ''}'.startsWith('image/')) {
+        metadata.remove('display_url');
+        final id = row['id'] as String;
+        if (metadata['storage_provider'] != 'r2' &&
+            '${metadata['type'] ?? ''}'.startsWith('image/')) {
           try {
             metadata['display_url'] = await client.storage
                 .from('website-media')
@@ -908,7 +924,7 @@ class SupabaseControlRoomRepository
           } catch (_) {}
         }
         return MediaRecord(
-          id: row['id'] as String,
+          id: id,
           websiteId: row['website_id'] as String,
           storagePath: storagePath,
           title: row['title'] as String?,
@@ -942,10 +958,7 @@ class SupabaseControlRoomRepository
             fileOptions: FileOptions(contentType: request.mediaType),
           );
     } catch (error) {
-      throw MediaUploadException(
-        MediaUploadStage.storage,
-        _safeReason(error),
-      );
+      throw MediaUploadException(MediaUploadStage.storage, _safeReason(error));
     }
     try {
       await client.from('media').insert({
@@ -956,11 +969,12 @@ class SupabaseControlRoomRepository
         'metadata': {'type': request.mediaType},
       });
     } catch (error) {
-      await client.storage.from('website-media').remove([path]);
-      throw MediaUploadException(
-        MediaUploadStage.metadata,
-        _safeReason(error),
-      );
+      try {
+        await client.storage.from('website-media').remove([path]);
+      } catch (_) {
+        // Preserve the original metadata error for the customer.
+      }
+      throw MediaUploadException(MediaUploadStage.metadata, _safeReason(error));
     }
   }
 
@@ -975,14 +989,19 @@ class SupabaseControlRoomRepository
     required String id,
     required String title,
     required Map<String, dynamic> metadata,
-  }) => client
-      .from('media')
-      .update({'title': title.trim(), 'metadata': metadata})
-      .eq('id', id);
+  }) {
+    final storedMetadata = Map<String, dynamic>.of(metadata)
+      ..remove('display_url');
+    return client
+        .from('media')
+        .update({'title': title.trim(), 'metadata': storedMetadata})
+        .eq('id', id);
+  }
 
   @override
-  Future<void> deleteMedia(String id) =>
-      client.functions.invoke('delete-media', body: {'mediaId': id});
+  Future<void> deleteMedia(String id) async {
+    await client.functions.invoke('delete-media', body: {'mediaId': id});
+  }
 
   @override
   Future<List<SocialLinkRecord>> listSocialLinks() async {

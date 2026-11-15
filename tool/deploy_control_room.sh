@@ -15,6 +15,11 @@ CONFIG_FILE="config/local.json"
 AUTH_STORAGE_SCOPE="newitt-control-room"
 PASSWORD_RESET_REDIRECT_URL="https://newitt-media-control-room.ian-newitt.workers.dev/auth-callback"
 WRANGLER_CONFIG="wrangler.control-room.jsonc"
+if [[ "${1:-}" == "--media-staging-build" ]]; then
+  CONFIG_FILE="config/media-staging.json"
+  AUTH_STORAGE_SCOPE="newitt-control-room-media-staging"
+  PASSWORD_RESET_REDIRECT_URL="https://newitt-media-control-room-media-staging.ian-newitt.workers.dev/auth-callback"
+fi
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "Missing $CONFIG_FILE. It supplies SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY and is not in source control." >&2
@@ -49,10 +54,10 @@ for expected in "$AUTH_STORAGE_SCOPE" "$PASSWORD_RESET_REDIRECT_URL"; do
 done
 echo "    auth storage scope and password reset callback present"
 
-if [[ "${1:-}" == "--build-only" ]]; then
+if [[ "${1:-}" == "--build-only" || "${1:-}" == "--media-staging-build" ]]; then
   echo "==> build only, not deploying"
   exit 0
 fi
 
 echo "==> wrangler deploy --config $WRANGLER_CONFIG"
-wrangler deploy --config "$WRANGLER_CONFIG"
+wrangler deploy --env="" --config "$WRANGLER_CONFIG"

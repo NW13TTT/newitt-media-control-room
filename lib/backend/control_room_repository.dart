@@ -341,7 +341,8 @@ class MediaUploadException implements Exception {
   final String reason;
 
   @override
-  String toString() => 'failed while ${stage.description}'
+  String toString() =>
+      'failed while ${stage.description}'
       '${reason.isEmpty ? '' : ' ($reason)'}';
 }
 
@@ -614,6 +615,10 @@ class SecuritySummaryRecord {
 
   final int recentAuditEvents;
   final DateTime? latestAuditEventAt;
+}
+
+abstract interface class MediaStorageUsageRepository {
+  Future<({int usedBytes, int quotaBytes})?> mediaStorageUsage();
 }
 
 abstract interface class ControlRoomRepository {

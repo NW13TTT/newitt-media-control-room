@@ -72,7 +72,7 @@ Deno.serve(async (request) => {
 
   const { data: media } = await admin
     .from("media")
-    .select("id, tenant_id, website_id, storage_path")
+    .select("id, tenant_id, website_id, storage_path, metadata")
     .eq("id", mediaId)
     .maybeSingle();
   if (!media) return reply({ error: "Media was not found." }, 404);
@@ -88,6 +88,10 @@ Deno.serve(async (request) => {
     website.tenant_id !== profile.tenant_id ||
     !validPath(media.storage_path, profile.tenant_id, media.website_id)
   ) return reply({ error: "You are not authorised to remove this media." }, 403);
+
+  if (media.metadata?.storage_provider === "r2") {
+    return reply({ error: "Remove this photo from the updated Control Room." }, 409);
+  }
 
   try {
     const { error: storageError } = await admin.storage.from(bucket).remove([media.storage_path]);

@@ -3,8 +3,11 @@
   "name": "newitt-media-control-room",
   "main": "./control-room-worker.js",
   "compatibility_date": "2026-09-06",
-  "assets": {
-    "directory": "./build/web",
-    "binding": "ASSETS"
+  "assets": { "directory": "./build/web", "binding": "ASSETS" },
+  "env": {
+    "media-staging": {
+      "name": "newitt-media-control-room-media-staging",
+      "assets": { "directory": "./build/web", "binding": "ASSETS" }
+    }
   }
 }
