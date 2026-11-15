@@ -754,6 +754,11 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
             'download it to this device first.',
           );
         }
+        if (bytes.length > _maxUploadBytes) {
+          throw FormatException(
+            'the file exceeds the ${_sizeLabel(_maxUploadBytes)} upload limit after processing.',
+          );
+        }
         await widget.repository!.uploadMedia(
           MediaUploadRequest(
             websiteId: websiteId,
