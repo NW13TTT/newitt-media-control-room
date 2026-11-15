@@ -16,11 +16,11 @@ For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
 samples, guidance on mobile development, and a full API reference.
 
-## Media staging and release checks
+## Supabase media staging
 
-Enable R2 on the Cloudflare account that owns the Control Room Worker and provision the private `newitt-control-room-media-staging` bucket. Configure the staging Worker with the staging Supabase URL and publishable key, apply the photo lookup migration to the staging database, and set the staging public content function's `CONTROL_ROOM_MEDIA_ORIGIN` to the staging Worker URL. Use a staging Supabase project with two test tenants and an isolated copy of the website publishing integration. Keep customer records and existing production buckets out of this test.
+Build with `tool/deploy_control_room.sh --media-staging-build` using a staging Supabase project. Apply the storage quota migration there first. Verify direct Storage API uploads respect quota and file limits, including simultaneous uploads. Then verify native iPhone Safari HEIC/HEIF conversion, private previews, publishing, unpublishing and deletion with two test tenants. Verify existing Supabase media paths still resolve.
 
-Set the staging client configuration in `config/media-staging.json` and allow the staging password reset callback in Supabase. Build with `tool/deploy_control_room.sh --media-staging-build`. Validate the bundle with `wrangler deploy --dry-run --env media-staging --config wrangler.control-room.jsonc` before deploying the staging Worker. Check sign-in, password reset, session persistence and both directions of tenant isolation. Upload and preview JPEG, PNG, HEIC and HEIF on iPhone Safari and the Home Screen app. Publish, replace, remove and restore test content. Compare both test websites after each action. Remove test media and verify legacy Supabase media still renders. Test staff booking creation, edits, cancellation and release of capacity using test events.
+The migration proposes 400 MB per customer, 800 MB across the website-media bucket and 50 MiB per file. Administrators can change the private budget and tenant overrides after checking the organisation's storage usage. Production and staging Worker configurations require only the existing asset binding.
 
 ## Deferred SumUp verification
 
