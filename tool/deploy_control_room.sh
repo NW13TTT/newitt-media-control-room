@@ -15,12 +15,10 @@ CONFIG_FILE="config/local.json"
 AUTH_STORAGE_SCOPE="newitt-control-room"
 PASSWORD_RESET_REDIRECT_URL="https://newitt-media-control-room.ian-newitt.workers.dev/auth-callback"
 WRANGLER_CONFIG="wrangler.control-room.jsonc"
-PHOTO_UPLOADS=false
 if [[ "${1:-}" == "--media-staging-build" ]]; then
   CONFIG_FILE="config/media-staging.json"
   AUTH_STORAGE_SCOPE="newitt-control-room-media-staging"
   PASSWORD_RESET_REDIRECT_URL="https://newitt-media-control-room-media-staging.ian-newitt.workers.dev/auth-callback"
-  PHOTO_UPLOADS=true
 fi
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
@@ -44,7 +42,6 @@ node --test test/media_upload_worker_test.mjs
 
 echo "==> flutter build web --release"
 flutter build web --release \
-  --dart-define=CLOUDFLARE_PHOTO_UPLOADS="$PHOTO_UPLOADS" \
   --dart-define-from-file="$CONFIG_FILE" \
   --dart-define=SUPABASE_AUTH_STORAGE_SCOPE="$AUTH_STORAGE_SCOPE" \
   --dart-define=SUPABASE_PASSWORD_RESET_REDIRECT_URL="$PASSWORD_RESET_REDIRECT_URL"
