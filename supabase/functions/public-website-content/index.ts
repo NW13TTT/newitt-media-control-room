@@ -48,18 +48,11 @@ async function signedPublishedMedia(
       ? (metadata as Record<string, unknown>).type
       : "";
     if (!/^(image|video|audio)\//.test(type)) return { id: item.id, title: item.title, metadata };
-    if ((metadata as Record<string, unknown>).storage_provider === "r2") {
-      const origin = Deno.env.get("CONTROL_ROOM_MEDIA_ORIGIN");
-      let photoUrl: URL | null = null;
-      try {
-        if (origin?.startsWith("https://")) {
-          photoUrl = new URL("/api/media/photos/" + item.id, origin);
-        }
-      } catch {
-        // A bad media origin must not interrupt existing site content.
-      }
-      photoUrl?.searchParams.set("domain", domain);
-      return { id: item.id, title: item.title, metadata, signedUrl: photoUrl?.href ?? null };
+    const path = item.storage_path?.split("/") ?? [];
+    if ((metadata as Record<string, unknown>).storage_provider === "r2" ||
+        path[0] !== website.tenant_id || path[1] !== website.id ||
+        path.length < 3 || path.some((part: string) => !part || part === "." || part === "..")) {
+      return { id: item.id, title: item.title, metadata, signedUrl: null };
     }
     const { data: signed } = await storage.storage
       .from("website-media")
