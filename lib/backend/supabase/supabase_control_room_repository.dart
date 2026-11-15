@@ -1,8 +1,4 @@
-import 'dart:convert';
 import 'dart:math';
-
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:http/http.dart' as http;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -10,7 +6,10 @@ import '../../auth/auth_models.dart';
 import '../control_room_repository.dart';
 
 class SupabaseControlRoomRepository
-    implements ControlRoomRepository, ControlRoomRepositoryFactory {
+    implements
+        ControlRoomRepository,
+        ControlRoomRepositoryFactory,
+        MediaStorageUsageRepository {
   SupabaseControlRoomRepository(this.client, [this._profile]);
 
   final SupabaseClient client;
@@ -892,6 +891,16 @@ class SupabaseControlRoomRepository
       client.from('website_content').delete().eq('id', id);
 
   @override
+  Future<({int usedBytes, int quotaBytes})?> mediaStorageUsage() async {
+    final result = await client.rpc('website_media_storage_usage');
+    if (result is! Map) return null;
+    return (
+      usedBytes: (result['used_bytes'] as num).toInt(),
+      quotaBytes: (result['quota_bytes'] as num).toInt(),
+    );
+  }
+
+  @override
   Future<List<MediaRecord>> listMedia({String? query}) async {
     var request = client
         .from('media')
@@ -906,14 +915,8 @@ class SupabaseControlRoomRepository
         final storagePath = row['storage_path'] as String;
         metadata.remove('display_url');
         final id = row['id'] as String;
-        final session = client.auth.currentSession;
-        Map<String, String>? previewHeaders;
-        if (metadata['storage_provider'] == 'r2') {
-          if (session != null && _photoUri(id).scheme.startsWith('http')) {
-            metadata['display_url'] = _photoUri(id).toString();
-            previewHeaders = {'Authorization': 'Bearer ${session.accessToken}'};
-          }
-        } else if ('${metadata['type'] ?? ''}'.startsWith('image/')) {
+        if (metadata['storage_provider'] != 'r2' &&
+            '${metadata['type'] ?? ''}'.startsWith('image/')) {
           try {
             metadata['display_url'] = await client.storage
                 .from('website-media')
@@ -922,7 +925,6 @@ class SupabaseControlRoomRepository
         }
         return MediaRecord(
           id: id,
-          previewHeaders: previewHeaders,
           websiteId: row['website_id'] as String,
           storagePath: storagePath,
           title: row['title'] as String?,
@@ -940,18 +942,6 @@ class SupabaseControlRoomRepository
         MediaUploadStage.authorisation,
         'the selected website is not available to this account',
       );
-    }
-    const cloudflarePhotos = bool.fromEnvironment('CLOUDFLARE_PHOTO_UPLOADS');
-    if (kIsWeb &&
-        cloudflarePhotos &&
-        const {
-          'image/jpeg',
-          'image/png',
-          'image/heic',
-          'image/heif',
-        }.contains(request.mediaType)) {
-      await _uploadCloudflarePhoto(request);
-      return;
     }
     final safeName = request.fileName.replaceAll(
       RegExp(r'[^A-Za-z0-9._-]'),
@@ -979,45 +969,13 @@ class SupabaseControlRoomRepository
         'metadata': {'type': request.mediaType},
       });
     } catch (error) {
-      await client.storage.from('website-media').remove([path]);
+      try {
+        await client.storage.from('website-media').remove([path]);
+      } catch (_) {
+        // Preserve the original metadata error for the customer.
+      }
       throw MediaUploadException(MediaUploadStage.metadata, _safeReason(error));
     }
-  }
-
-  Future<void> _uploadCloudflarePhoto(MediaUploadRequest request) async {
-    final session = client.auth.currentSession;
-    if (session == null) {
-      throw const MediaUploadException(
-        MediaUploadStage.authorisation,
-        'sign in again to upload a photo',
-      );
-    }
-    final response = await http.post(
-      _photoUri(),
-      headers: {
-        'Authorization': 'Bearer ${session.accessToken}',
-        'Content-Type': 'application/octet-stream',
-        'X-Website-Id': request.websiteId,
-        'X-Photo-Name': Uri.encodeComponent(request.fileName),
-      },
-      body: request.bytes,
-    );
-    if (response.statusCode == 201) return;
-    String reason = 'Photo upload failed. Try again.';
-    try {
-      final body = jsonDecode(response.body);
-      if (body is Map && body['error'] is String) {
-        reason = body['error'] as String;
-      }
-    } on FormatException {
-      // The edge may return a non-JSON response when the service is down.
-    }
-    throw MediaUploadException(
-      response.statusCode == 401 || response.statusCode == 403
-          ? MediaUploadStage.authorisation
-          : MediaUploadStage.storage,
-      reason,
-    );
   }
 
   static String _safeReason(Object error) => switch (error) {
@@ -1040,37 +998,9 @@ class SupabaseControlRoomRepository
         .eq('id', id);
   }
 
-  static Uri _photoUri([String? id]) {
-    const origin = String.fromEnvironment('CONTROL_ROOM_MEDIA_ORIGIN');
-    final base = kIsWeb || origin.isEmpty ? Uri.base : Uri.parse(origin);
-    return base.resolve(
-      id == null ? '/api/media/photos' : '/api/media/photos/$id',
-    );
-  }
-
   @override
   Future<void> deleteMedia(String id) async {
-    final row = await client
-        .from('media')
-        .select('metadata')
-        .eq('id', id)
-        .single();
-    final metadata = row['metadata'] as Map;
-    if (metadata['storage_provider'] != 'r2') {
-      await client.functions.invoke('delete-media', body: {'mediaId': id});
-      return;
-    }
-    final session = client.auth.currentSession;
-    if (session == null) {
-      throw StateError('Sign in again to delete this photo.');
-    }
-    final response = await http.delete(
-      _photoUri(id),
-      headers: {'Authorization': 'Bearer ${session.accessToken}'},
-    );
-    if (response.statusCode != 204) {
-      throw StateError('Photo removal failed. Refresh the library and retry.');
-    }
+    await client.functions.invoke('delete-media', body: {'mediaId': id});
   }
 
   @override
