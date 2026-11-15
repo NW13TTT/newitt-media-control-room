@@ -19,7 +19,9 @@ test("validates tenant and photo before writing, and cleans up rejected metadata
         return Response.json(tenant);
       case "/rest/v1/websites": return Response.json([{ id, tenant_id: mode === "foreign" ? id : tenant }]);
       case "/rest/v1/media":
-        assert.equal(JSON.parse(options.body).title, "Moira Furnace.jpg");
+        const record = JSON.parse(options.body);
+        assert.equal(record.title, "Moira Furnace.jpg");
+        assert.equal(record.storage_path, tenant + "/" + id + "/" + record.id + ".webp");
         return new Response(null, { status: mode === "denied" ? 403 : 201 });
       default: throw new Error(url.pathname);
     }
@@ -81,7 +83,8 @@ test("previews private photos, serves only published photos and scopes deletion"
       events.push("delete row");
       return Response.json([{ id }]);
     }
-    return Response.json(token === "Bearer foreign" ? [] : [row]);
+    return Response.json(token === "Bearer foreign" ? [] : [token === "Bearer alias"
+      ? { ...row, storage_path: tenant + "/" + id + "/" + tenant + ".webp" } : row]);
   };
   const env = {
     SUPABASE_URL: "https://database.example",
@@ -104,6 +107,8 @@ test("previews private photos, serves only published photos and scopes deletion"
   try {
     assert.equal((await call("GET")).status, 401);
     assert.equal((await call("GET", "foreign")).status, 404);
+    assert.equal((await call("GET", "alias")).status, 404);
+    assert.equal((await call("DELETE", "alias")).status, 404);
     assert.equal(await (await call("GET", "customer")).text(), "webp");
     assert.equal((await call("GET", null, "newittmedia.co.uk")).status, 404);
     assert.equal((await call("GET", null, "essexparanormal.com")).status, 200);
