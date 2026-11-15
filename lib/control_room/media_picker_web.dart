@@ -15,6 +15,7 @@ Future<List<MediaSelection>> pickMedia() {
   final result = Completer<List<MediaSelection>>();
 
   final change = ((web.Event _) {
+    if (result.isCompleted) return;
     final files = input.files;
     result.complete([
       if (files != null)
@@ -22,7 +23,9 @@ Future<List<MediaSelection>> pickMedia() {
           if (files.item(i) case final file?) _selection(file),
     ]);
   }).toJS;
-  final cancel = ((web.Event _) => result.complete(<MediaSelection>[])).toJS;
+  final cancel = ((web.Event _) {
+    if (!result.isCompleted) result.complete(<MediaSelection>[]);
+  }).toJS;
 
   input.addEventListener('change', change);
   input.addEventListener('cancel', cancel);
@@ -32,7 +35,7 @@ Future<List<MediaSelection>> pickMedia() {
   try {
     input.click();
   } catch (error, stack) {
-    result.completeError(error, stack);
+    if (!result.isCompleted) result.completeError(error, stack);
   }
   return result.future.timeout(const Duration(minutes: 2)).whenComplete(() {
     input.removeEventListener('change', change);
