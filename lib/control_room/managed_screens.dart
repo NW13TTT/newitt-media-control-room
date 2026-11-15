@@ -803,6 +803,18 @@ class _MediaLibraryScreenState extends State<MediaLibraryScreen> {
         ? const _UnavailableState()
         : Column(
             children: [
+              if (widget.repository
+                  case final MediaStorageUsageRepository usage)
+                FutureBuilder<({int usedBytes, int quotaBytes})?>(
+                  future: usage.mediaStorageUsage(),
+                  builder: (context, snapshot) {
+                    final usage = snapshot.data;
+                    if (usage == null) return const SizedBox.shrink();
+                    return Text(
+                      'Storage used: ${_sizeLabel(usage.usedBytes)} of ${_sizeLabel(usage.quotaBytes)}',
+                    );
+                  },
+                ),
               if (widget.websites
                       .where((website) => website.id != null)
                       .length >
@@ -988,7 +1000,6 @@ class _MediaLibraryItem extends StatelessWidget {
               child: canPreview
                   ? Image.network(
                       displayUrl,
-                      headers: item.previewHeaders,
                       fit: BoxFit.cover,
                       errorBuilder: (_, _, _) =>
                           const _MediaTypeIcon(type: 'image/'),
