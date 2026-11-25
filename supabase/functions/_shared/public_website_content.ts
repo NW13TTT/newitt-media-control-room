@@ -62,7 +62,8 @@ function publicSettings(value: unknown): Record<string, unknown> {
 }
 
 function publicContent(value: unknown, depth = 0): unknown {
-  if (depth > 5 || value === null || typeof value === 'boolean' || typeof value === 'number') {
+  if (depth > 5) return null;
+  if (value === null || typeof value === 'boolean' || typeof value === 'number') {
     return value;
   }
   if (typeof value === 'string') return value.length <= 10000 ? value : value.slice(0, 10000);
@@ -80,6 +81,14 @@ export function parsePublicWebsiteContentRequest(input: Record<string, unknown>)
   if (Object.keys(input).length !== 1 || !Object.hasOwn(input, 'domain')) return null;
   const domain = string(input.domain, 255)?.toLowerCase();
   return domain && publicWebsiteDomains.has(domain) ? domain : null;
+}
+
+function isPrivateContent(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const content = value as Record<string, unknown>;
+  return [content.eventType, content.recordType, content.visibility]
+    .some((field) => typeof field === 'string' &&
+      /^(private|internal|appointment|private_investigation)$/i.test(field.trim()));
 }
 
 export function publicWebsiteContentResponse({
@@ -112,7 +121,7 @@ export function publicWebsiteContentResponse({
         published: true,
       })),
     content: content
-      .filter((entry) => entry.content_status === 'PUBLISHED')
+      .filter((entry) => entry.content_status === 'PUBLISHED' && !isPrivateContent(entry.content))
       .map((entry) => ({
         contentKey: string(entry.content_key, 160),
         content: entry.content && typeof entry.content === 'object' && !Array.isArray(entry.content)

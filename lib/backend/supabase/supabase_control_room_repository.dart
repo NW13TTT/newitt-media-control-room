@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../auth/auth_models.dart';
+import '../calendar_repository.dart';
 import '../control_room_repository.dart';
 
 class SupabaseControlRoomRepository
@@ -21,6 +22,70 @@ class SupabaseControlRoomRepository
       throw StateError('An authenticated profile is required.');
     }
     return profile;
+  }
+
+  @override
+  Future<WebsiteCalendarData> loadWebsiteCalendar(String websiteId) async {
+    if (profile.role != AuthRole.owner ||
+        !profile.websiteIds.contains(websiteId)) {
+      throw StateError('Website booking access is required.');
+    }
+    final contentRequest = client
+        .from('website_content')
+        .select(
+          'id, website_id, content_key, content, updated_at, content_status',
+        )
+        .eq('tenant_id', profile.tenantId)
+        .eq('website_id', websiteId);
+    final capacityRequest = client
+        .from('event_booking_settings')
+        .select('event_content_id, capacity')
+        .eq('tenant_id', profile.tenantId)
+        .eq('website_id', websiteId);
+    final bookingRequest = client
+        .from('event_bookings')
+        .select(
+          'id, event_content_id, customer_name, customer_email, attendee_count, status, payment_status',
+        )
+        .eq('tenant_id', profile.tenantId)
+        .eq('website_id', websiteId)
+        .order('created_at', ascending: false);
+    final results = await Future.wait([
+      contentRequest,
+      capacityRequest,
+      bookingRequest,
+    ]);
+    return WebsiteCalendarData(
+      content: results[0]
+          .map(
+            (row) => ContentRecord(
+              id: row['id'] as String,
+              websiteId: websiteId,
+              contentKey: row['content_key'] as String,
+              content: Map<String, dynamic>.from(row['content'] as Map),
+              updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? ''),
+              status: row['content_status'] as String,
+            ),
+          )
+          .toList(),
+      capacity: {
+        for (final row in results[1])
+          row['event_content_id'] as String: row['capacity'] as int,
+      },
+      bookings: results[2]
+          .map(
+            (row) => CalendarBooking(
+              reference: row['id'] as String,
+              eventId: row['event_content_id'] as String,
+              customer: row['customer_name'] as String,
+              email: row['customer_email'] as String,
+              places: row['attendee_count'] as int,
+              status: row['status'] as String,
+              payment: row['payment_status'] as String,
+            ),
+          )
+          .toList(),
+    );
   }
 
   @override

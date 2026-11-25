@@ -89,6 +89,9 @@ Deno.serve(async (request) => {
     !validPath(media.storage_path, profile.tenant_id, media.website_id)
   ) return reply({ error: "You are not authorised to remove this media." }, 403);
 
+  if (media.metadata?.published === true) {
+    return reply({ error: "Unpublish this media before deleting it." }, 409);
+  }
   if (media.metadata?.storage_provider === "r2") {
     return reply({ error: "Remove this photo from the updated Control Room." }, 409);
   }

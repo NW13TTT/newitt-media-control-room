@@ -6,12 +6,14 @@ import 'package:supabase_flutter/supabase_flutter.dart'
     show PostgrestException, StorageException;
 
 import '../auth/auth_models.dart';
+import '../backend/calendar_repository.dart';
 import '../backend/control_room_repository.dart';
 import 'content_section_editor.dart';
 import 'contact_enquiries_screen.dart';
 import 'media_picker.dart';
 import 'media_selection.dart';
 import 'website_feature_inventory_screen.dart';
+import 'website_calendar_screen.dart';
 import '../core/layout/responsive.dart';
 import '../help/smart_help_button.dart';
 import '../websites/website_model.dart';
@@ -63,6 +65,14 @@ class WebsiteManagementScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final activeSession = session;
     final isCustomer = activeSession?.profile.role == AuthRole.customer;
+    final calendarRepository = repository;
+    final calendarWebsites = websites.where(
+      (website) =>
+          website.id != null &&
+          website.domain.toLowerCase() == 'essexparanormal.com' &&
+          activeSession?.profile.role == AuthRole.owner &&
+          activeSession!.profile.websiteIds.contains(website.id),
+    );
     final configuration = websites.isEmpty
         ? null
         : websites.first.configuration;
@@ -79,6 +89,26 @@ class WebsiteManagementScreen extends StatelessWidget {
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (calendarRepository is WebsiteCalendarRepository)
+                  for (final website in calendarWebsites)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.calendar_month_outlined),
+                        label: const Text('Essex Paranormal booking calendar'),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => WebsiteCalendarScreen(
+                              websiteId: website.id!,
+                              websiteName: website.name,
+                              repository:
+                                  calendarRepository
+                                      as WebsiteCalendarRepository,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 _WebsiteAnalyticsSummary(repository: repository!),
                 const SizedBox(height: 12),
                 _WebsiteCloudflareStatus(
@@ -1126,6 +1156,12 @@ class _MediaMetadataDialogState extends State<_MediaMetadataDialog> {
   late final description = TextEditingController(
     text: '${widget.item.metadata['description'] ?? ''}',
   );
+  late final altText = TextEditingController(
+    text: '${widget.item.metadata['altText'] ?? ''}',
+  );
+  late final galleryPosition = TextEditingController(
+    text: '${widget.item.metadata['galleryPosition'] ?? ''}',
+  );
   late final caption = TextEditingController(
     text: '${widget.item.metadata['caption'] ?? ''}',
   );
@@ -1161,6 +1197,8 @@ class _MediaMetadataDialogState extends State<_MediaMetadataDialog> {
   void dispose() {
     title.dispose();
     description.dispose();
+    altText.dispose();
+    galleryPosition.dispose();
     caption.dispose();
     category.dispose();
     location.dispose();
@@ -1183,16 +1221,23 @@ class _MediaMetadataDialogState extends State<_MediaMetadataDialog> {
               controller: title,
               decoration: const InputDecoration(labelText: 'Title'),
             ),
-            DropdownButtonFormField<String>(
-              initialValue: type,
-              items: const [
-                'image/jpeg',
-                'video/mp4',
-                'audio/mpeg',
-              ].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
-              onChanged: (v) => setState(() => type = v!),
-              decoration: const InputDecoration(labelText: 'Media type'),
-            ),
+            if (type.startsWith('image/')) ...[
+              TextField(
+                controller: altText,
+                maxLength: 200,
+                decoration: const InputDecoration(
+                  labelText: 'Alternative text',
+                ),
+              ),
+              TextField(
+                controller: galleryPosition,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Gallery position',
+                  helperText: 'Lower numbers appear first.',
+                ),
+              ),
+            ],
             TextField(
               controller: caption,
               decoration: const InputDecoration(
@@ -1254,6 +1299,16 @@ class _MediaMetadataDialogState extends State<_MediaMetadataDialog> {
   );
   Future<void> _save() async {
     if (title.text.trim().isEmpty) return;
+    final position = int.tryParse(galleryPosition.text.trim());
+    if (galleryPosition.text.trim().isNotEmpty &&
+        (position == null || position < 1 || position > 9999)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a gallery position between 1 and 9999.'),
+        ),
+      );
+      return;
+    }
     setState(() => saving = true);
     try {
       await widget.repository.saveMediaMetadata(
@@ -1263,6 +1318,8 @@ class _MediaMetadataDialogState extends State<_MediaMetadataDialog> {
           ...widget.item.metadata,
           'type': type,
           'caption': caption.text,
+          'altText': altText.text.trim(),
+          'galleryPosition': position,
           'description': description.text,
           'category': category.text,
           'location': location.text,

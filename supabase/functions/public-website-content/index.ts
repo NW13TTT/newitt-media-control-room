@@ -54,9 +54,14 @@ async function signedPublishedMedia(
         path.length < 3 || path.some((part: string) => !part || part === "." || part === "..")) {
       return { id: item.id, title: item.title, metadata, signedUrl: null };
     }
-    const { data: signed } = await storage.storage
-      .from("website-media")
-      .createSignedUrl(item.storage_path, 900);
+    const bucket = storage.storage.from("website-media");
+    const canOptimise = /^image\/(jpeg|png|webp)$/.test(type);
+    const { data: resized } = canOptimise
+      ? await bucket.createSignedUrl(item.storage_path, 900, {
+          transform: { width: 1440, resize: "contain", quality: 82 },
+        })
+      : { data: null };
+    const signed = resized ?? (await bucket.createSignedUrl(item.storage_path, 900)).data;
     return {
       id: item.id,
       title: item.title,
